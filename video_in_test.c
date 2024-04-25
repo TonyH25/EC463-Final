@@ -8,13 +8,18 @@ void VGA_box(int x1, int y1, int x2, int y2, short pixel_color);
 void VGA_outline_y(int x1, int y1, short pixel_color);
 void VGA_outline_x(int x1, int y1, short pixel_color);
 void VGA_loadInit(int top_x,int top_y, short int img[][28]);
+void updateInput();
+short findAverage(short img);
+RAMtoClassifier(short int ramIMG[][28]);
 
 #define BLACK 0x0000         // Black
 #define WHITE 0xFFFF         // White
 #define RED 0xF800           // Red
 #define BLUE 0x001F          // Blue
 #define GREEN 0x07E0         // Green
+#define YELLOW 0xE742		// Yellow
 short initIMG[28][28];
+char  networkInput[28][28];
 
 int main(void){
 	volatile int * VIDEO_IN_CONTROL_ptr  = (int *) VIDEO_IN_BASE;
@@ -31,7 +36,7 @@ int main(void){
 	/* Write a text string to VGA */
 	VGA_text(20, 1, text);
 
-	// blue screen
+	//generate a blue screen for SDRAM buffer
 	short blue[240][320];
 	for (row = 0; row <= 239; row++){
 		for (col = 0; col <= 319; col++){
@@ -39,14 +44,6 @@ int main(void){
 		}
 	}
 
-	int o_set = 0;
-	for (row = 0; row <= 27; row++){
-		for (col = 0; col <= 27; col++){
-			o_set = (row+106 << 9) + col+146;						// compute offset 
-			initIMG[row][col] = *((short*)FPGA_ONCHIP_BASE+o_set);
-		}
-	}
-	
 	// Intialize SDRAM buffer to a blue image
 	VGA_load_image_sdram(blue);
 	
@@ -61,11 +58,13 @@ int main(void){
 		if (*(KEY_ptr + 3) & 0x08){					// if KEY(3) is detected
 		
 			*(VIDEO_IN_CONTROL_ptr + 3)  ^= (1<<2);	// toggle (enable/disable) video_in
-			//VGA_box(160-14,120-14,160+14,120+14,0x001f);
-			VGA_outline_x(106,146,0xffff);
-			VGA_outline_y(106,146,0xffff);
-			VGA_outline_y(134,146,0xffff);
-			VGA_outline_x(106,174,0xffff);
+			
+			//Create an outline around an area when you disable the camera. Used to convert camera into NN input
+			//YELLOW in 24 bit RGB is 225, 231, 16 -> weights of 0.87890625,0.90234375,0.0625 -> 28,58,2 -> 0xE742
+			VGA_outline_x(106,146,0xe742);
+			VGA_outline_y(106,146,0xe742);
+			VGA_outline_y(134,146,0xe742);
+			VGA_outline_x(106,174,0xe742);
 			
 			*(KEY_ptr + 3) = (1 << 3); 				// clear flag for KEY(3)
 		}
@@ -78,23 +77,16 @@ int main(void){
 				*(VGA_DMA_CONTROL_ptr + 1) = (int)FPGA_ONCHIP_BASE;
 			}
 			else{
-				*(VIDEO_IN_CONTROL_ptr + 3)  &= ~(1<<2);	// toggle (enable/disable) video_in
+				*(VIDEO_IN_CONTROL_ptr + 3)  &= ~(1<<2);	// disable video_in
 				*(VGA_DMA_CONTROL_ptr + 1) = (int)SDRAM_BASE;
-				int o_set = 0;
-				for (row = 106; row <= 106+27; row++){
-					for (col = 146; col <= 146+27; col++){
-						o_set = (row << 9) + col;						// compute offset 
-
-						initIMG[row][col] = *((short*)FPGA_ONCHIP_BASE+o_set);
-					}
-				}
+				updateInput();
 				VGA_load_number_sdram(initIMG);
 				VGA_loadInit(0,0,initIMG);
 				VGA_loadInit(200,200,initIMG);
 			}
 			*(VGA_DMA_CONTROL_ptr + 0) = 1;
 			
-			*(VIDEO_IN_CONTROL_ptr + 3) |= (1<<2);	// toggle (enable/disable) video_in
+			*(VIDEO_IN_CONTROL_ptr + 3) |= (1<<2);	// enable video_in
 			*(KEY_ptr + 3) = (1 << 2);  // clear flag for KEY(2)
 		}
 	}
@@ -215,4 +207,42 @@ void VGA_outline_y(int x1, int y1, short pixel_color){
 		offset = (row << 9) + col;
 		*(pixel_buffer + offset) = (short)pixel_color;
 	}
+}
+void updateInput(){
+	int o_set = 0, row, col;
+	int i = 0, j = 0;
+	volatile short * fpga_chip = (short *) FPGA_ONCHIP_BASE;	//  on-chip buffer
+	//106+27, 146+27
+	for (row = 106; row <= 133; row++){
+		for (col = 146; col <= 173; col++){
+			o_set = (row << 9) + col;						// compute offset 
+			//initIMG[row-106][col-146] = *(fpga_chip+o_set);
+			initIMG[i][j++] = *(fpga_chip+o_set);
+		}
+		i++;
+	}
+}
+
+RAMtoClassifier(short int ramIMG[][28]){
+    int offset, row, col;
+    short gray;
+	//Upscale the value by three to extend the range from (0 to 41) to (0 to 255) (256/42 = 6)
+	int scaleVal = 6;
+    short *pixel_buffer = (short *)SDRAM_BASE; // pixel buffer
+    for (row = 0; row <= 27; row++){
+        for (col = 0; col <= 27; col++){
+            offset = (row << 9) + col;
+            gray = findAverage(ramIMG[row][col]);
+            networkInput[row][col] = (char) gray*scaleVal;
+        }
+    }
+}
+
+short findAverage(short img){
+    short int red, green, blue, avg;
+    red = (img & RED) >> 11;
+    green = (img & GREEN) >> 5;
+    blue = img & BLUE;
+    avg = (red + green + blue) / 3;
+    return avg;
 }
