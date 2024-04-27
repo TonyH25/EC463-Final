@@ -10,7 +10,7 @@ typedef float (*weight)[28];
 
 int max(int*, int); //parameters are array of ints and length of array
 
-int main()
+int main(unsigned char img [28][28])
 {
   //Create output source
   volatile int* SW_ptr = SW_BASE;
@@ -50,7 +50,6 @@ int main()
 //Return the index of the maximum array value
 int max(int* arr, int len)
 {
-  printf("\n Finding Max \n");
   int max = arr[0],   // max value
       ret = 0;        // index of max value
   int i;
@@ -62,6 +61,5 @@ int max(int* arr, int len)
       ret = i;
     }
   }
-  printf("\n Max Value is %d \n", ret);
   return ret;
 }

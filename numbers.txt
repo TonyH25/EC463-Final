@@ -1,0 +1,13 @@
+// Tony Harrington, Jadiel Arana
+// This file contains the number positions
+// All are 36x36
+// 0 x:4 y:4
+// 1 x:48  y:4
+// 2 x:90  y:4
+// 3 x:130  y:4
+// 4 x:171  y:4
+// 5 x:212  y:4
+// 6 x:4  y:47
+// 7 x:48  y:47
+// 8 x:90  y:47
+// 9 x:130  y:47
