@@ -17,6 +17,7 @@ void VGA_loadInit(int top_x,int top_y, short int img[][28]);
 void updateInput();
 short findAverage(short img);
 void RAMtoClassifier(short int (*)[28]);
+void displayConversion();
 
 #define BLACK 0x0000         // Black
 #define WHITE 0xFFFF         // White
@@ -26,6 +27,7 @@ void RAMtoClassifier(short int (*)[28]);
 #define YELLOW 0xE742		     // Yellow
 char  networkInput[28][28];
 short initIMG[28][28];
+short conversion[28][28];
 
 int main(void){
 	volatile int * VIDEO_IN_CONTROL_ptr  = (int *) VIDEO_IN_BASE;
@@ -68,9 +70,9 @@ int main(void){
 
 			//Create an outline around an area when you disable the camera. Used to convert camera into NN input
 			//YELLOW in 24 bit RGB is 225, 231, 16 -> weights of 0.87890625,0.90234375,0.0625 -> 28,58,2 -> 0xE742
-			VGA_outline_x(106,146,0xe742);
-			VGA_outline_y(106,146,0xe742);
-			VGA_outline_y(134,146,0xe742);
+			VGA_outline_x(105,145,0xe742); //Left side of the square
+			VGA_outline_y(105,146,0xe742); //Top of the square
+			VGA_outline_y(135,146,0xe742);
 			VGA_outline_x(106,174,0xe742);
 
 			*(KEY_ptr + 3) = (1 << 3); 				// clear flag for KEY(3)
@@ -84,24 +86,28 @@ int main(void){
 				*(VGA_DMA_CONTROL_ptr + 1) = (int)FPGA_ONCHIP_BASE;
 			}
 			else{
+				(*LED_ptr) = 0xff;
 				*(VIDEO_IN_CONTROL_ptr + 3)  &= ~(1<<2);	// disable video_in
 				*(VGA_DMA_CONTROL_ptr + 1) = (int)SDRAM_BASE;
 				updateInput();
 				VGA_load_number_sdram(initIMG);
 				VGA_loadInit(0,0,initIMG);
-				VGA_loadInit(200,200,initIMG);
+				VGA_loadInit(200,200,conversion);
 				RAMtoClassifier(initIMG);
-				printf("{");
-				int k, l;
-				for(k = 0; k < 28; k++)
-				{
-					for(l = 0; l < 28; l++)
-					{
+				displayConversion();
+				//printf("{");
+				//int k, l;
+				//for(k = 0; k < 28; k++)
+				//{
+					//for(l = 0; l < 28; l++)
+					//{
 						//printf("%d ", (int) networkInput[k][l]);
-					}
-				}
+					//}
+				//}
 				//printf("}");
+				while((*(KEY_ptr + 3) & 0x02)==0){} //KEY(1) not detected
 				(*LED_ptr) = classify(networkInput);
+				*(KEY_ptr + 3) = (1 << 1);  // clear flag for KEY(2)
 			}
 			*(VGA_DMA_CONTROL_ptr + 0) = 1;
 
@@ -209,7 +215,7 @@ void VGA_outline_x(int x1, int y1, short pixel_color){
     short *pixel_buffer = (short *)FPGA_ONCHIP_BASE; // pixel buffer
     /* assume that the box coordinates are valid */
 	col = y1;
-	for (row = x1; row <= x1+28; row++){
+	for (row = x1; row <= x1+29; row++){
 		offset = (row << 9) + col;
 		*(pixel_buffer + offset) = (short)pixel_color;
 	}
@@ -222,7 +228,7 @@ void VGA_outline_y(int x1, int y1, short pixel_color){
     short *pixel_buffer = (short *)FPGA_ONCHIP_BASE; // pixel buffer
     /* assume that the box coordinates are valid */
 	row = x1;
-	for (col = y1; col <= y1+28; col++){
+	for (col = y1; col <= y1+29; col++){
 		offset = (row << 9) + col;
 		*(pixel_buffer + offset) = (short)pixel_color;
 	}
@@ -252,7 +258,13 @@ void RAMtoClassifier(short int ramIMG[][28]){
         for (col = 0; col <= 27; col++){
             offset = (row << 9) + col;
             gray = findAverage(ramIMG[row][col]);
-            networkInput[row][col] = (char) gray*scaleVal;
+            gray = gray*scaleVal;
+			if (gray < 0x2f){
+				gray = 0;
+			} else if (gray > 0xD0){
+				gray = 0xFF;
+			}
+			networkInput[row][col] = gray;
         }
     }
 }
@@ -264,4 +276,16 @@ short findAverage(short img){
     blue = img & BLUE;
     avg = (red + green + blue) / 3;
     return avg;
+}
+
+void displayConversion(){
+    int row, col;
+    short gray;
+    short *pixel_buffer = (short *)SDRAM_BASE; // pixel buffer
+    for (row = 0; row <= 27; row++){
+        for (col = 0; col <= 27; col++){
+            gray = findAverage(initIMG[row][col]);
+            conversion[row][col] = gray << 5;
+        }
+    }
 }
