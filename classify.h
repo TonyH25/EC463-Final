@@ -17,9 +17,9 @@ int classify(img_type image)
   for(i = 0; i < 10; i++)
   {
     int sum = 0;
-    for(j = 0; j < 28; j++)
+    for(k = 0; k < 28; k++)
     {
-      for(k = 0; k < 28; k++)
+      for(j = 0; j < 28; j++)
       {
         sum += weights[i][j][k]*(float)image[j][k];
       }

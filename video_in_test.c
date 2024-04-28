@@ -92,9 +92,9 @@ int main(void){
 				updateInput();
 				VGA_load_number_sdram(initIMG);
 				VGA_loadInit(0,0,initIMG);
-				VGA_loadInit(200,200,conversion);
 				RAMtoClassifier(initIMG);
 				displayConversion();
+				VGA_loadInit(200,200,conversion);
 				//printf("{");
 				//int k, l;
 				//for(k = 0; k < 28; k++)
@@ -106,7 +106,7 @@ int main(void){
 				//}
 				//printf("}");
 				while((*(KEY_ptr + 3) & 0x02)==0){} //KEY(1) not detected
-				(*LED_ptr) = classify(networkInput);
+				(*LED_ptr) = (1 << classify(networkInput));
 				*(KEY_ptr + 3) = (1 << 1);  // clear flag for KEY(2)
 			}
 			*(VGA_DMA_CONTROL_ptr + 0) = 1;
@@ -241,7 +241,6 @@ void updateInput(){
 	for (row = 106; row <= 133; row++){
 		for (col = 146; col <= 173; col++){
 			o_set = (row << 9) + col;						// compute offset
-			//initIMG[row-106][col-146] = *(fpga_chip+o_set);
 			initIMG[i][j++] = *(fpga_chip+o_set);
 		}
 		i++;
@@ -264,7 +263,7 @@ void RAMtoClassifier(short int ramIMG[][28]){
 			} else if (gray > 0xD0){
 				gray = 0xFF;
 			}
-			networkInput[row][col] = gray;
+			networkInput[row][col] = (char) gray;
         }
     }
 }
@@ -281,7 +280,6 @@ short findAverage(short img){
 void displayConversion(){
     int row, col;
     short gray;
-    short *pixel_buffer = (short *)SDRAM_BASE; // pixel buffer
     for (row = 0; row <= 27; row++){
         for (col = 0; col <= 27; col++){
             gray = findAverage(initIMG[row][col]);
