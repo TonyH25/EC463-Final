@@ -56,7 +56,7 @@ int main(void){
 	}
 
 	// Intialize SDRAM buffer to a blue image
-	VGA_load_image_sdram(blue);
+	VGA_load_image_sdram(Initial_Screen); //Image offsets are 117,140 to center the image
 
 	// Initialize Video in and VGA interfaces
 	*(VIDEO_IN_CONTROL_ptr + 3)  = (1<<2);			// enable live video --> frame = on-chip buffer by default
@@ -92,8 +92,9 @@ int main(void){
 				*(VIDEO_IN_CONTROL_ptr + 3)  &= ~(1<<2);	// disable video_in
 				*(VGA_DMA_CONTROL_ptr + 1) = (int)SDRAM_BASE;
 				updateInput();
-				VGA_load_number_sdram(initIMG);
+				//VGA_load_number_sdram(initIMG);
 				VGA_loadInit(0,0,testThresh);
+				VGA_loadInit(117,140,initIMG);
 				RAMtoClassifier(initIMG);
 				displayConversion();
 				VGA_loadInit(200,200,conversion);
@@ -132,8 +133,8 @@ void VGA_load_number_sdram(short int image[][28]){
 	int i = 0, j = 0;
 	volatile short * pixel_buffer = (short *)SDRAM_BASE;	//  SRAM buffer
 	/* assume that the box coordinates are valid */
-	for (row = 100; row <= 127; row++){
-		for (col = 100; col <= 127; col++){
+	for (row = 106; row <= 146; row++){
+		for (col = 146; col <= 173; col++){
 			offset = (row << 9) + col;						// compute offset
 			*(pixel_buffer + offset) = (short)(image[i][j++]);		// set pixel value
 		}
@@ -244,7 +245,7 @@ void VGA_outline_y(int x1, int y1, short pixel_color){
 	}
 }
 /**
- * Updates the global var networkInput by pulling a 28x28 box that goes from (106,146) to (146,173) (the center of the box; where the yellow box is drawn)
+ * Updates the global var networkInput by pulling a 28x28 box that goes from (106,146) to (133,173) (the center of the box; where the yellow box is drawn)
  */
 void updateInput(){
 	int o_set = 0, row, col;
