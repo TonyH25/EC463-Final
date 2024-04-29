@@ -1,3 +1,5 @@
+
+
 #include "address_map_arm.h"
 #include "weights_fp.h"
 #include "img.h"
@@ -93,9 +95,9 @@ int main(void){
 				*(VGA_DMA_CONTROL_ptr + 1) = (int)SDRAM_BASE;
 				updateInput();
 				//VGA_load_number_sdram(initIMG);
-				VGA_loadInit(0,0,testThresh);
 				VGA_loadInit(117,140,initIMG);
 				RAMtoClassifier(initIMG);
+				VGA_loadInit(0,0,testThresh);
 				displayConversion();
 				VGA_loadInit(200,200,conversion);
 				while((*(KEY_ptr + 3) & 0x02)==0){} //KEY(1) not detected
@@ -265,13 +267,15 @@ void updateInput(){
  * Converts the RRRR RGGG GGGB BBBB (16 bit short) into a 8 bit grayscale value (0-255 is the amount of gray present) to pass to the classifier
 */
 void RAMtoClassifier(short int ramIMG[][28]){
-    int offset, row, col, red, blue, green;
+    int offset, row, col, red, blue, green, THRESHOLD;
     short gray, testThr;
+	volatile int * SW_ptr = SW_BASE;
 	//Upscale the value by three to extend the range from (0 to 41) to (0 to 255) (256/42 = 6)
 	int scaleVal = 6;
     short *pixel_buffer = (short *)SDRAM_BASE; // pixel buffer
     for (row = 0; row <= 27; row++){
-        for (col = 0; col <= 27; col++){
+        for (col = 0; col <= 27; col++)
+				{
             offset = (row << 9) + col;
             gray = findAverage(ramIMG[row][col]);
 			testThr = gray;
@@ -285,18 +289,21 @@ void RAMtoClassifier(short int ramIMG[][28]){
 				green = gray&0x3f;
 				blue = gray&0x1f;
 			}
+			THRESHOLD = (*SW_ptr);
 			testThr = (red << 11) | (green << 6) | blue;
-			if (gray < 127){
+			if (gray < THRESHOLD)
+			{
 				gray = 0;
-				testThr = 0x0000;
-			} else {
+				testThr = 0;
+			}
+			else {
 				gray = 0xFF;
 				testThr = 0xFFFF;
 			}
 			networkInput[row][col] = (char) gray;
 			testThresh[row][col] = testThr;
-        }
-    }
+			}
+		}
 }
 
 /**

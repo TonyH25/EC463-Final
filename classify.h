@@ -6,6 +6,7 @@ typedef char  (*img_type)[28];
 
 int max(int*, int); //parameters are array of ints and length of array
 
+
 int classify(img_type image)
 {
   //Create array of 10 potential digits
@@ -17,21 +18,20 @@ int classify(img_type image)
   for(i = 0; i < 10; i++)
   {
     int sum = 0;
-    for(k = 0; k < 28; k++)
+    for(j = 0; j < 28; j++)
     {
-      for(j = 0; j < 28; j++)
+      for(k = 0; k < 28; k++)
       {
         sum += weights[i][j][k]*(float)image[j][k];
         //printf("%d ", (int) image[j][k]);
       }
+      //printf("\n");
     }
     output[i] = sum;
   }
-  //printf("\n");
   int digit = max(output,10);
   return digit;
 }
-
 
 //Return the index of the maximum array value
 int max(int* arr, int len)
