@@ -14,6 +14,7 @@ void VGA_box(int x1, int y1, int x2, int y2, short pixel_color);
 void VGA_outline_y(int x1, int y1, short pixel_color);
 void VGA_outline_x(int x1, int y1, short pixel_color);
 void VGA_loadInit(int top_x,int top_y, short int img[][28]);
+void VGA_loadImage(int top_x,int top_y, short int img[][28]);
 void updateInput();
 short findAverage(short img);
 void RAMtoClassifier(short int (*)[28]);
@@ -124,7 +125,7 @@ void VGA_load_image_sdram(short int image[][320]){
 }
 
 /***************************************************************
-	Function to load and dispaly a number (28x28 box) on SDRAM in the middle of the screen
+	Function to load and dispaly a number (28x28 box) on SDRAM in the middle of the screen (100,100) to (127,127)
 *************************************************************/
 void VGA_load_number_sdram(short int image[][28]){
 	int offset, row, col;
@@ -158,7 +159,7 @@ void VGA_text(int x, int y, char * text_ptr){
 	}
 }
 
-//Draws an colored box from (top_x to bot_x) and (top_y to bot_y)
+//Draws a colored box from (top_x to bot_x) and (top_y to bot_y)
 void VGA_load_sdram(int top_x,int bot_x, int top_y, int bot_y,short color){
 	int offset, row, col;
 	volatile short * pixel_buffer = (short *)SDRAM_BASE;	//  SRAM buffer
@@ -173,6 +174,23 @@ void VGA_load_sdram(int top_x,int bot_x, int top_y, int bot_y,short color){
 
 //Draws a 28x28 array based on the coords given (top_x to top_x+27) and (top_y to top_y+27)
 void VGA_loadInit(int top_x,int top_y, short int img[][28]){
+	int offset, row, col;
+	int i = 0, j = 0;
+	volatile short * pixel_buffer = (short *)SDRAM_BASE;	//  SRAM buffer
+	/* assume that the box coordinates are valid */
+	for (row = top_x; row < top_x+28; row++)
+	{
+		for (col = top_y; col < top_y+28; col++)
+		{
+			offset = (row << 9) + col;						// compute offset
+			*(pixel_buffer + offset) = img[i][j++];		// set pixel value
+		}
+		i++;
+	}
+}
+
+//Draws a 28x28 array based on the coords given (top_x to top_x+27) and (top_y to top_y+27)
+void VGA_loadImage(int top_x,int top_y, short int img[][28]){
 	int offset, row, col;
 	int i = 0, j = 0;
 	volatile short * pixel_buffer = (short *)SDRAM_BASE;	//  SRAM buffer
