@@ -22,10 +22,12 @@ int classify(img_type image)
       for(j = 0; j < 28; j++)
       {
         sum += weights[i][j][k]*(float)image[j][k];
+        printf("%d ", (int) image[j][k]);
       }
     }
     output[i] = sum;
   }
+  printf("\n");
   int digit = max(output,10);
   return digit;
 }

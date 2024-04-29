@@ -25,9 +25,10 @@ void displayConversion();
 #define BLUE 0x001F          // Blue
 #define GREEN 0x07E0         // Green
 #define YELLOW 0xE742		     // Yellow
-char  networkInput[28][28];
-short initIMG[28][28];
-short conversion[28][28];
+short initIMG[28][28]; //Holds the value pulled from the yellow box of the ON_CHIP buffer (Where the number will be)
+char  networkInput[28][28]; //Converted equiv of initIMG to pass to the classifier
+short conversion[28][28]; //Contains the green equivalent of networkInput
+short testThresh[28][28]; //Contains a threshold/clamped equivalent of initIMG
 
 int main(void){
 	volatile int * VIDEO_IN_CONTROL_ptr  = (int *) VIDEO_IN_BASE;
@@ -91,20 +92,10 @@ int main(void){
 				*(VGA_DMA_CONTROL_ptr + 1) = (int)SDRAM_BASE;
 				updateInput();
 				VGA_load_number_sdram(initIMG);
-				VGA_loadInit(0,0,initIMG);
+				VGA_loadInit(0,0,testThresh);
 				RAMtoClassifier(initIMG);
 				displayConversion();
 				VGA_loadInit(200,200,conversion);
-				//printf("{");
-				//int k, l;
-				//for(k = 0; k < 28; k++)
-				//{
-					//for(l = 0; l < 28; l++)
-					//{
-						//printf("%d ", (int) networkInput[k][l]);
-					//}
-				//}
-				//printf("}");
 				while((*(KEY_ptr + 3) & 0x02)==0){} //KEY(1) not detected
 				(*LED_ptr) = (1 << classify(networkInput));
 				*(KEY_ptr + 3) = (1 << 1);  // clear flag for KEY(2)
@@ -118,7 +109,7 @@ int main(void){
 }
 
 /***************************************************************
-	Function to load and dispaly an image on SDRAM
+	Function to load and dispaly an image (240x320) on SDRAM
 *************************************************************/
 void VGA_load_image_sdram(short int image[][320]){
 	int offset, row, col;
@@ -133,7 +124,7 @@ void VGA_load_image_sdram(short int image[][320]){
 }
 
 /***************************************************************
-	Function to load and dispaly an image on SDRAM
+	Function to load and dispaly a number (28x28 box) on SDRAM in the middle of the screen
 *************************************************************/
 void VGA_load_number_sdram(short int image[][28]){
 	int offset, row, col;
@@ -167,6 +158,7 @@ void VGA_text(int x, int y, char * text_ptr){
 	}
 }
 
+//Draws an colored box from (top_x to bot_x) and (top_y to bot_y)
 void VGA_load_sdram(int top_x,int bot_x, int top_y, int bot_y,short color){
 	int offset, row, col;
 	volatile short * pixel_buffer = (short *)SDRAM_BASE;	//  SRAM buffer
@@ -179,6 +171,7 @@ void VGA_load_sdram(int top_x,int bot_x, int top_y, int bot_y,short color){
 	}
 }
 
+//Draws a 28x28 array based on the coords given (top_x to top_x+27) and (top_y to top_y+27)
 void VGA_loadInit(int top_x,int top_y, short int img[][28]){
 	int offset, row, col;
 	int i = 0, j = 0;
@@ -189,8 +182,7 @@ void VGA_loadInit(int top_x,int top_y, short int img[][28]){
 		for (col = top_y; col < top_y+28; col++)
 		{
 			offset = (row << 9) + col;						// compute offset
-			*(pixel_buffer + offset) = img[i][j];		// set pixel value
-			j++;
+			*(pixel_buffer + offset) = img[i][j++];		// set pixel value
 		}
 		i++;
 	}
@@ -208,7 +200,7 @@ void VGA_box(int x1, int y1, int x2, int y2, short pixel_color){
     }
 }
 /*
- * (row, col, color)
+ * (row, col, color) for a 29 pixel long vertical line
  */
 void VGA_outline_x(int x1, int y1, short pixel_color){
     int offset, row, col;
@@ -221,7 +213,7 @@ void VGA_outline_x(int x1, int y1, short pixel_color){
 	}
 }
 /*
- * (row, col, color)
+ * (row, col, color) for a 29 pixel long horizontal line
  */
 void VGA_outline_y(int x1, int y1, short pixel_color){
     int offset, row, col;
@@ -233,6 +225,9 @@ void VGA_outline_y(int x1, int y1, short pixel_color){
 		*(pixel_buffer + offset) = (short)pixel_color;
 	}
 }
+/**
+ * Updates the global var networkInput by pulling a 28x28 box that goes from (106,146) to (146,173) (the center of the box; where the yellow box is drawn)
+ */
 void updateInput(){
 	int o_set = 0, row, col;
 	int i = 0, j = 0;
@@ -247,9 +242,12 @@ void updateInput(){
 	}
 }
 
+/**
+ * Converts the RRRR RGGG GGGB BBBB (16 bit short) into a 8 bit grayscale value (0-255 is the amount of gray present) to pass to the classifier
+*/
 void RAMtoClassifier(short int ramIMG[][28]){
-    int offset, row, col;
-    short gray;
+    int offset, row, col, red, blue, green;
+    short gray, testThr;
 	//Upscale the value by three to extend the range from (0 to 41) to (0 to 255) (256/42 = 6)
 	int scaleVal = 6;
     short *pixel_buffer = (short *)SDRAM_BASE; // pixel buffer
@@ -257,17 +255,35 @@ void RAMtoClassifier(short int ramIMG[][28]){
         for (col = 0; col <= 27; col++){
             offset = (row << 9) + col;
             gray = findAverage(ramIMG[row][col]);
+			testThr = gray;
             gray = gray*scaleVal;
-			if (gray < 0x2f){
+			if (gray > 31){ // 63 is overflow. Green can overflow since it is 6 bits
+				red = 0x1f;
+				blue = BLUE; //1f
+				green = 0x3f; //consider changing this to 63 (0x3f) if there is a purple tint **DEBUG THIS IF ANY ISSUES**
+			} else {
+				red = gray&0x1f;
+				green = gray&0x3f;
+				blue = gray&0x1f;
+			}
+			testThr = (red << 11) | (green << 6) | blue;
+			if (gray < 127){
 				gray = 0;
-			} else if (gray > 0xD0){
+				testThr = 0x0000;
+			} else {
 				gray = 0xFF;
+				testThr = 0xFFFF;
 			}
 			networkInput[row][col] = (char) gray;
+			testThresh[row][col] = testThr;
         }
     }
 }
 
+/**
+ * Computes the average value of RRRR RGGG GGGB BBBB
+ * Range from: 0 to 41
+*/
 short findAverage(short img){
     short int red, green, blue, avg;
     red = (img & RED) >> 11;
@@ -277,6 +293,9 @@ short findAverage(short img){
     return avg;
 }
 
+/**
+ * Shifts the average value (0 to 41) to the 6 bit Green field (0 to 63)
+*/
 void displayConversion(){
     int row, col;
     short gray;
