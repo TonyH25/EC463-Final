@@ -83,15 +83,13 @@ int main(void)
 		// if KEY(2) is detected, swap buffers for VGA display
 		else if (*(KEY_ptr + 3) & 0x04)	{	// if KEY(2) is detected
 			show_live_video ^= 1;
-			if (((*SW_ptr) & (1<<7)))
+			if (show_live_video)
 			{
 				*(VGA_DMA_CONTROL_ptr + 1) = (int)FPGA_ONCHIP_BASE;
 			}
-			else if(show_live_video)
+			else 
 			{
 				*(VGA_DMA_CONTROL_ptr + 1) = (int)SDRAM_BASE;
-			} else {
-				*(VGA_DMA_CONTROL_ptr + 1) = (int)FPGA_ONCHIP_BASE;
 			}
 			*(VGA_DMA_CONTROL_ptr + 0) = 1;
 			
@@ -125,11 +123,13 @@ int main(void)
 
 				findBinIMG( initIMG, threshold, networkInput);	// find binary (8-bit and 16-bit) images
 				Write_small_img(150, 140, networkInput, SDRAM_BASE);
-				VGA_loadInit(150,100,initIMG);
+				VGA_loadInit(100,140,initIMG);
 			} else {
 				VGA_load_image_sdram(Finished);
 				VGA_loadInit(50,137,initIMG);
-				VGA_loadInit(207,137,initIMG);
+				findBinIMG( initIMG, threshold, networkInput);	// find binary (8-bit and 16-bit) images
+				Write_small_img(207, 137, networkInput, SDRAM_BASE);
+				//VGA_loadInit(207,137,initIMG);
 			}
 			num = classify(networkInput);
 			*HEX3_HEX0_ptr = (ssd[16] << 24) + (ssd[16] << 16)+ (ssd[16] << 8) + (ssd[num]);
@@ -245,7 +245,7 @@ void findBinIMG(short src_img[][28], int threshold, char dst_img[][28]) {
 	volatile  int row, col, R, G, B, RGB, gray, invertValues;
 	volatile int * SW_ptr 				= (int *) SW_BASE ;	
 	int i = 0, j = 0;
-	invertValues = (*SW_ptr) & (1<<8);	// 8-bit threshold value
+	invertValues = (*SW_ptr) & (1<<8);	// 9-bit controls toggle
 	
 	j = 0;
 	for (row = 0; row < 28; row++)
