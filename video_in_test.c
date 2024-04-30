@@ -183,6 +183,7 @@ void VGA_loadInit(int top_x,int top_y, short int img[][28]){
 	/* assume that the box coordinates are valid */
 	for (row = top_x; row < top_x+28; row++)
 	{
+		j=0;
 		for (col = top_y; col < top_y+28; col++)
 		{
 			offset = (row << 9) + col;						// compute offset

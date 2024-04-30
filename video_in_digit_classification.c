@@ -2,6 +2,7 @@
 #include "weights_fp.h"
 #include "classification.h"
 #include "Image.h"
+#include "img.h"
 
 void VGA_load_image_sdram(short int image[][320]);
 void VGA_text(int top_x, int top_y, char * txt);
@@ -34,7 +35,7 @@ int main(void)
 	
 	char text[] = "USNA EC463 MICROCOMPUTER INTERFACING FINAL PROJECT\0";
 	/* Write a text string to VGA */
-	VGA_text(20, 1, text);
+	VGA_text(20, 0, text);
 
 	// blue screen
 	short blue[240][320];
@@ -53,7 +54,7 @@ int main(void)
 	col = 0;
 	
 	// Intialize SDRAM buffer to a blue image
-	VGA_load_image_sdram(blue);
+	VGA_load_image_sdram(Initial_Screen);
 	
 	// Initialize Video in and VGA interfaces	
 	*(VIDEO_IN_CONTROL_ptr + 3)  = (1<<2);			// enable live video --> frame = on-chip buffer by default
@@ -81,50 +82,59 @@ int main(void)
 		
 		// if KEY(2) is detected, swap buffers for VGA display
 		else if (*(KEY_ptr + 3) & 0x04)	{	// if KEY(2) is detected
-			
 			show_live_video ^= 1;
-			if (show_live_video)
+			if (((*SW_ptr) & (1<<7)))
 			{
 				*(VGA_DMA_CONTROL_ptr + 1) = (int)FPGA_ONCHIP_BASE;
 			}
-			else
+			else if(show_live_video)
 			{
 				*(VGA_DMA_CONTROL_ptr + 1) = (int)SDRAM_BASE;
+			} else {
+				*(VGA_DMA_CONTROL_ptr + 1) = (int)FPGA_ONCHIP_BASE;
 			}
 			*(VGA_DMA_CONTROL_ptr + 0) = 1;
 			
 			CopyInput(initIMG);				// copy current box to internal image initIMG
-			VGA_loadInit(117,140,initIMG);	// Draw the internal image to SDRAM
+			VGA_load_image_sdram(Initial_Screen);
+			VGA_loadInit(140,117,initIMG);
+
 			
 			avg = findAverage(initIMG);		// find average intensity of the internal image
 			*LEDR_ptr   = avg;				// show avg value on red LEDs
-		
-			Write_small_img(0, 10, Image1, FPGA_ONCHIP_BASE);
-			Write_small_img(0, 10, Image1, SDRAM_BASE);
-			Write_small_img(30, 10, Image2, SDRAM_BASE);
-			Write_small_img(60, 10, Image3, SDRAM_BASE);
-			Write_small_img(90, 10, Image4, SDRAM_BASE);
-			Write_small_img(120, 10, Image5, SDRAM_BASE);
-			Write_small_img(150, 10, Image6, SDRAM_BASE);
-			Write_small_img(180, 10, Image7, SDRAM_BASE);
-			Write_small_img(210, 10, Image8, SDRAM_BASE);
-			Write_small_img(240, 10, Image9, SDRAM_BASE);
-			Write_small_img(270, 10, Image10, SDRAM_BASE);
 			
 			*(KEY_ptr + 3) = (1 << 2);  // clear flag for KEY(2)
 		}
 		
 		// if KEY(1) is detected, swap buffers for VGA display
 		else if (*(KEY_ptr + 3) & 0x02)	{	// if KEY(1) is detected
-			
-			threshold  = (*SW_ptr) & 0xFF;	// 8-bit threshold value
-			findBinIMG( initIMG, threshold, networkInput);	// find binary (8-bit and 16-bit) images
-			Write_small_img(150, 140, networkInput, SDRAM_BASE);
+			threshold  = (*SW_ptr) & 0x7F;	// 8-bit threshold value
+			if((*SW_ptr) & (1<<9)){
+				VGA_load_image_sdram(blue);
+				Write_small_img(0, 10, Image1, FPGA_ONCHIP_BASE);
+				Write_small_img(0, 10, Image1, SDRAM_BASE);
+				Write_small_img(30, 10, Image2, SDRAM_BASE);
+				Write_small_img(60, 10, Image3, SDRAM_BASE);
+				Write_small_img(90, 10, Image4, SDRAM_BASE);
+				Write_small_img(120, 10, Image5, SDRAM_BASE);
+				Write_small_img(150, 10, Image6, SDRAM_BASE);
+				Write_small_img(180, 10, Image7, SDRAM_BASE);
+				Write_small_img(210, 10, Image8, SDRAM_BASE);
+				Write_small_img(240, 10, Image9, SDRAM_BASE);
+				Write_small_img(270, 10, Image10, SDRAM_BASE);
+
+				findBinIMG( initIMG, threshold, networkInput);	// find binary (8-bit and 16-bit) images
+				Write_small_img(150, 140, networkInput, SDRAM_BASE);
+				VGA_loadInit(150,100,initIMG);
+			} else {
+				VGA_load_image_sdram(Finished);
+				VGA_loadInit(50,137,initIMG);
+				VGA_loadInit(207,137,initIMG);
+			}
 			num = classify(networkInput);
 			*HEX3_HEX0_ptr = (ssd[16] << 24) + (ssd[16] << 16)+ (ssd[16] << 8) + (ssd[num]);
 			*(KEY_ptr + 3) = (1 << 1);		// clear flag for KEY(1)
 		}
-		
 	}
 }
 
@@ -162,6 +172,8 @@ void Write_small_img(int x1, int y1, char image[][28], int base_address)
  * Copy a 28x28 box that goes from (106,146) to (133,173) to global array initIMG[28][28] 
  */
 void CopyInput(short int img[][28]){
+	volatile int * VIDEO_IN_CONTROL_ptr  = (int *) VIDEO_IN_BASE;
+	*(VIDEO_IN_CONTROL_ptr + 3)  &= ~(1<<2);	// disable video_in
 	int o_set = 0, row, col;
 	int i = 0, j = 0;
 	volatile short * fpga_chip = (short *) FPGA_ONCHIP_BASE;	//  on-chip buffer
@@ -177,6 +189,7 @@ void CopyInput(short int img[][28]){
 		//i++;
 		j++;
 	}
+	*(VIDEO_IN_CONTROL_ptr + 3)  |= (1<<2);	// disable video_in
 }
 //Draws a 28x28 array based on the coords given (top_x to top_x+27) and (top_y to top_y+27)
 void VGA_loadInit(int top_x, int top_y, short int img[][28]){
@@ -229,8 +242,10 @@ int findAverage(short int img[][28]){
 	Calculate binary image based on threshold value
 *************************************************************/
 void findBinIMG(short src_img[][28], int threshold, char dst_img[][28]) {
-	volatile  int row, col, R, G, B, RGB, gray;
+	volatile  int row, col, R, G, B, RGB, gray, invertValues;
+	volatile int * SW_ptr 				= (int *) SW_BASE ;	
 	int i = 0, j = 0;
+	invertValues = (*SW_ptr) & (1<<8);	// 8-bit threshold value
 	
 	j = 0;
 	for (row = 0; row < 28; row++)
@@ -245,11 +260,19 @@ void findBinIMG(short src_img[][28], int threshold, char dst_img[][28]) {
 			
 			if (gray > threshold)
 			{
-				dst_img [i][j]		= (char)0xFF;
+				if(invertValues){
+					dst_img [i][j]		= (char)0x00;
+				} else {
+					dst_img [i][j]		= (char)0xFF;
+				}
 			}
 			else
 			{
-				dst_img [i][j]		= (char)0x00;
+				if(invertValues){
+					dst_img [i][j]		= (char)0xFF;
+				} else {
+					dst_img [i][j]		= (char)0x00;
+				}
 			}
 			
 			i++;
