@@ -1,0 +1,34 @@
+EC 463 Handwritten Digit Classifier
+Tony Harrington, Jadiel Arana
+
+Purpose: This uses the camera to take a picture of a handwritten image, then classifies it
+
+Software Set up:
+Required Files:
+  Main: video_in_digit_classification.c
+  Headers: address_map_arm.h       // Contains arm mapping addresses
+           Image.h                 // Contains sample numbers for classifier
+           img.h                   // Contains all transitional screen images
+           loading.h               // Contains functions for load screen
+           classification.h        // Contains functions for digit classification
+           weights_fp.h            // Contains weight arrays for classification
+
+Physical Set Up:
+  Materials: De1-SoC, Camera, VGA
+
+  Steps:
+    1. Energize and power DE1-SoC Board. Connect VGA output to monitor.
+    2. Energize camera and connect to DE1-SoC using the yellow cord.
+    3. Point camera at a white or black background.
+        - If white, switch SW8 High
+        - If black, switch SW8 Low
+
+Running System
+  Steps:
+    1. Should see camera feed on monitor. Press KEY(3) to see test box.
+    2. Write digit on background. Center in blue test box.
+    3. Press KEY(2) to lock in digit. Should see new screen prompting KEY(1)
+    4. Observe LEDRs. Use SW7 downto SW0 to set thresholding value. Aim for 1 to 2 higher than
+        LED values(in binary)
+    4. Press KEY(1) to classify digit. Should see loading screen, then classified digit
+        dislayed on HEX(0) 

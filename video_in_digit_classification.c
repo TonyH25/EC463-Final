@@ -3,6 +3,8 @@
 #include "classification.h"
 #include "Image.h"
 #include "img.h"
+#include "loading.h"
+
 
 void VGA_load_image_sdram(short int image[][320]);
 void VGA_text(int top_x, int top_y, char * txt);
@@ -27,12 +29,12 @@ int main(void)
 	volatile int row, col, avg, threshold, num;
 	volatile int show_live_video;
 	volatile int * LEDR_ptr 		= (int *) LEDR_BASE;
-	volatile int * SW_ptr 				= (int *) SW_BASE ;	
+	volatile int * SW_ptr 				= (int *) SW_BASE ;
 	volatile int *HEX3_HEX0_ptr = (int *)HEX3_HEX0_BASE;
-	
+
 	int ssd[] = { 0xbf, 0x86, 0xdb, 0xcf, 0xe6, 0xed, 0xfd, 0x87,
 				  0xff, 0xef, 0xf7, 0xfc, 0xb9, 0xde, 0xf9, 0xf1, 0x00 }; // patterns for ssd
-	
+	out_img out[10] = {zero,one,two,three,four,five,six,seven,eight,nine};
 	char text[] = "USNA EC463 MICROCOMPUTER INTERFACING FINAL PROJECT\0";
 	/* Write a text string to VGA */
 	VGA_text(20, 0, text);
@@ -52,34 +54,34 @@ int main(void)
 	}
 	row = 0;
 	col = 0;
-	
+
 	// Intialize SDRAM buffer to a blue image
 	VGA_load_image_sdram(Initial_Screen);
-	
-	// Initialize Video in and VGA interfaces	
+
+	// Initialize Video in and VGA interfaces
 	*(VIDEO_IN_CONTROL_ptr + 3)  = (1<<2);			// enable live video --> frame = on-chip buffer by default
 	*(VGA_DMA_CONTROL_ptr + 1) = FPGA_ONCHIP_BASE; 	// live video input will be shown on VGA
 	*(VGA_DMA_CONTROL_ptr + 0) = 1;
 	show_live_video = 1;
-	
+
 	while(1)
-	{	
+	{
 		// if KEY(3) is detected, enable or disable (toggle) the video in interface
 		if (*(KEY_ptr + 3) & 0x08){					// if KEY(3) is detected
-		
+
 			*(VIDEO_IN_CONTROL_ptr + 3)  ^= (1<<2);	// toggle (enable/disable) video_in
-			
+
 			//Create an outline around an area when you disable the camera. Used to convert camera into NN input
 			//YELLOW in 24 bit RGB is 225, 231, 16 -> weights of 0.87890625,0.90234375,0.0625 -> 28,58,2 -> 0xE742
 			VGA_outline_x(105,145,0xe742); //Left side of the square
 			VGA_outline_y(105,146,0xe742); //Top of the square
 			VGA_outline_y(135,146,0xe742);
 			VGA_outline_x(106,174,0xe742);
-			
-			
+
+
 			*(KEY_ptr + 3) = (1 << 3); 				// clear flag for KEY(3)
 		}
-		
+
 		// if KEY(2) is detected, swap buffers for VGA display
 		else if (*(KEY_ptr + 3) & 0x04)	{	// if KEY(2) is detected
 			show_live_video ^= 1;
@@ -87,23 +89,23 @@ int main(void)
 			{
 				*(VGA_DMA_CONTROL_ptr + 1) = (int)FPGA_ONCHIP_BASE;
 			}
-			else 
+			else
 			{
 				*(VGA_DMA_CONTROL_ptr + 1) = (int)SDRAM_BASE;
 			}
 			*(VGA_DMA_CONTROL_ptr + 0) = 1;
-			
+
 			CopyInput(initIMG);				// copy current box to internal image initIMG
 			VGA_load_image_sdram(Initial_Screen);
 			VGA_loadInit(140,117,initIMG);
 
-			
+
 			avg = findAverage(initIMG);		// find average intensity of the internal image
 			*LEDR_ptr   = avg;				// show avg value on red LEDs
-			
+
 			*(KEY_ptr + 3) = (1 << 2);  // clear flag for KEY(2)
 		}
-		
+
 		// if KEY(1) is detected, swap buffers for VGA display
 		else if (*(KEY_ptr + 3) & 0x02)	{	// if KEY(1) is detected
 			threshold  = (*SW_ptr) & 0x7F;	// 8-bit threshold value
@@ -125,6 +127,7 @@ int main(void)
 				Write_small_img(150, 140, networkInput, SDRAM_BASE);
 				VGA_loadInit(100,140,initIMG);
 			} else {
+				loadscreen(100000000);
 				VGA_load_image_sdram(Finished);
 				VGA_loadInit(50,137,initIMG);
 				findBinIMG( initIMG, threshold, networkInput);	// find binary (8-bit and 16-bit) images
@@ -169,7 +172,7 @@ void Write_small_img(int x1, int y1, char image[][28], int base_address)
 	}
 }
 /**
- * Copy a 28x28 box that goes from (106,146) to (133,173) to global array initIMG[28][28] 
+ * Copy a 28x28 box that goes from (106,146) to (133,173) to global array initIMG[28][28]
  */
 void CopyInput(short int img[][28]){
 	volatile int * VIDEO_IN_CONTROL_ptr  = (int *) VIDEO_IN_BASE;
@@ -214,9 +217,9 @@ void VGA_loadInit(int top_x, int top_y, short int img[][28]){
 	}
 }
 int findAverage(short int img[][28]){
-	
+
 	volatile int row, col, R, G, B, gray, sum, avg;
-	
+
 	/* assume that the box coordinates are valid */
 	sum = 0;
 	for (row = 0; row < 28; row++)
@@ -230,11 +233,11 @@ int findAverage(short int img[][28]){
 			sum += gray;
 		}
 	}
-	
+
 	avg = sum/784;
-	
+
 	return avg;
-	
+
 }
 
 
@@ -243,10 +246,10 @@ int findAverage(short int img[][28]){
 *************************************************************/
 void findBinIMG(short src_img[][28], int threshold, char dst_img[][28]) {
 	volatile  int row, col, R, G, B, RGB, gray, invertValues;
-	volatile int * SW_ptr 				= (int *) SW_BASE ;	
+	volatile int * SW_ptr 				= (int *) SW_BASE ;
 	int i = 0, j = 0;
 	invertValues = (*SW_ptr) & (1<<8);	// 9-bit controls toggle
-	
+
 	j = 0;
 	for (row = 0; row < 28; row++)
 	{
@@ -257,7 +260,7 @@ void findBinIMG(short src_img[][28], int threshold, char dst_img[][28]) {
 			G = (src_img[col][row] >> 5) & 0x3F;
 			B = (src_img[col][row]) & 0x1F;
 			gray = (R + G + B) / 3;
-			
+
 			if (gray > threshold)
 			{
 				if(invertValues){
@@ -274,12 +277,12 @@ void findBinIMG(short src_img[][28], int threshold, char dst_img[][28]) {
 					dst_img [i][j]		= (char)0x00;
 				}
 			}
-			
+
 			i++;
 		}
 		j++;
 	}
-	
+
 }
 
 /*
@@ -337,12 +340,8 @@ void VGA_load_image_sdram(short int image[][320])
 	{
 		for (col = 0; col <= 319; col++)
 		{
-			offset = (row << 9) + col;						// compute offset 
+			offset = (row << 9) + col;						// compute offset
 			*(pixel_buffer + offset) = (short)(image[row][col]);		// set pixel value
 		}
 	}
 }
-
-
-
-

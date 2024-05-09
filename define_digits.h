@@ -1,5 +1,5 @@
 //This file defines the number positions
-
+//Each is 36x36
 
 #define ZERO_X    4
 #define ZERO_Y    4
